@@ -12,35 +12,35 @@ const MAX_POLLING_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 export { POLLING_INTERVAL_MS, MAX_POLLING_DURATION_MS };
 
 export const getClient = (apiKey: string, baseUrl?: string | null): GoogleGenAI => {
-  try {
-      // Sanitize the API key to replace common non-ASCII characters that might
-      // be introduced by copy-pasting from rich text editors. This prevents
-      // "Failed to execute 'append' on 'Headers': Invalid character" errors.
-      const sanitizedApiKey = apiKey
-          .replace(/[\u2013\u2014]/g, '-') // en-dash, em-dash to hyphen
-          .replace(/[\u2018\u2019]/g, "'") // smart single quotes to apostrophe
-          .replace(/[\u201C\u201D]/g, '"') // smart double quotes to quote
-          .replace(/[\u00A0]/g, ' '); // non-breaking space to regular space
-          
-      if (apiKey !== sanitizedApiKey) {
-          logService.warn("API key was sanitized. Non-ASCII characters were replaced.");
-      }
-      
-      const config: any = { apiKey: sanitizedApiKey };
-      
-      // Use the SDK's native baseUrl support if provided.
-      // This is more robust than the network interceptor for SDK-generated requests.
-      if (baseUrl && baseUrl.trim().length > 0) {
-          // Remove trailing slash for consistency
-          config.baseUrl = baseUrl.trim().replace(/\/$/, '');
-      }
-      
-      return new GoogleGenAI(config);
-  } catch (error) {
-      logService.error("Failed to initialize GoogleGenAI client:", error);
-      // Re-throw to be caught by the calling function
-      throw error;
-  }
+    try {
+        // Sanitize the API key to replace common non-ASCII characters that might
+        // be introduced by copy-pasting from rich text editors. This prevents
+        // "Failed to execute 'append' on 'Headers': Invalid character" errors.
+        const sanitizedApiKey = apiKey
+            .replace(/[\u2013\u2014]/g, '-') // en-dash, em-dash to hyphen
+            .replace(/[\u2018\u2019]/g, "'") // smart single quotes to apostrophe
+            .replace(/[\u201C\u201D]/g, '"') // smart double quotes to quote
+            .replace(/[\u00A0]/g, ' '); // non-breaking space to regular space
+
+        if (apiKey !== sanitizedApiKey) {
+            logService.warn("API key was sanitized. Non-ASCII characters were replaced.");
+        }
+
+        const config: any = { apiKey: sanitizedApiKey };
+
+        // Use the SDK's native baseUrl support if provided.
+        // This is more robust than the network interceptor for SDK-generated requests.
+        if (baseUrl && baseUrl.trim().length > 0) {
+            // Remove trailing slash for consistency
+            config.baseUrl = baseUrl.trim().replace(/\/$/, '');
+        }
+
+        return new GoogleGenAI(config);
+    } catch (error) {
+        logService.error("Failed to initialize GoogleGenAI client:", error);
+        // Re-throw to be caught by the calling function
+        throw error;
+    }
 };
 
 export const getApiClient = (apiKey?: string | null, baseUrl?: string | null): GoogleGenAI => {
@@ -58,19 +58,19 @@ export const getApiClient = (apiKey?: string | null, baseUrl?: string | null): G
  */
 export const getConfiguredApiClient = async (apiKey: string): Promise<GoogleGenAI> => {
     const settings = await dbService.getAppSettings();
-    
+
     // Only use the proxy URL if Custom Config AND Use Proxy are both enabled
     // Explicitly check for truthiness to handle undefined/null
     const shouldUseProxy = !!(settings?.useCustomApiConfig && settings?.useApiProxy);
     const apiProxyUrl = shouldUseProxy ? settings?.apiProxyUrl : null;
-    
+
     if (settings?.useCustomApiConfig && !shouldUseProxy) {
         // Debugging aid: if user expects proxy but it's not active
         if (settings?.apiProxyUrl && !settings?.useApiProxy) {
-             logService.debug("[API Config] Proxy URL present but 'Use API Proxy' toggle is OFF.");
+            logService.debug("[API Config] Proxy URL present but 'Use API Proxy' toggle is OFF.");
         }
     }
-    
+
     return getClient(apiKey, apiProxyUrl);
 };
 
@@ -83,7 +83,7 @@ export const buildGenerationConfig = (
     isGoogleSearchEnabled?: boolean,
     isCodeExecutionEnabled?: boolean,
     isUrlContextEnabled?: boolean,
-    thinkingLevel?: 'LOW' | 'HIGH',
+    thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH',
     aspectRatio?: string,
     isDeepSearchEnabled?: boolean,
     imageSize?: string,
@@ -93,7 +93,7 @@ export const buildGenerationConfig = (
     if (modelId === 'gemini-2.5-flash-image-preview' || modelId === 'gemini-2.5-flash-image') {
         const imageConfig: any = {};
         if (aspectRatio && aspectRatio !== 'Auto') imageConfig.aspectRatio = aspectRatio;
-        
+
         const config: any = {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
         };
@@ -104,31 +104,31 @@ export const buildGenerationConfig = (
     }
 
     if (modelId === 'gemini-3-pro-image-preview') {
-         const imageConfig: any = {
+        const imageConfig: any = {
             imageSize: imageSize || '1K',
-         };
-         if (aspectRatio && aspectRatio !== 'Auto') {
+        };
+        if (aspectRatio && aspectRatio !== 'Auto') {
             imageConfig.aspectRatio = aspectRatio;
-         }
-         
-         const config: any = {
+        }
+
+        const config: any = {
             responseModalities: ['IMAGE', 'TEXT'],
             imageConfig,
-         };
-         
-         // Add tools if enabled
-         const tools = [];
-         if (isGoogleSearchEnabled || isDeepSearchEnabled) tools.push({ googleSearch: {} });
-         if (tools.length > 0) config.tools = tools;
-         
-         if (systemInstruction) config.systemInstruction = systemInstruction;
-         
-         return config;
+        };
+
+        // Add tools if enabled
+        const tools = [];
+        if (isGoogleSearchEnabled || isDeepSearchEnabled) tools.push({ googleSearch: {} });
+        if (tools.length > 0) config.tools = tools;
+
+        if (systemInstruction) config.systemInstruction = systemInstruction;
+
+        return config;
     }
-    
+
     let finalSystemInstruction = systemInstruction;
     if (isDeepSearchEnabled) {
-        finalSystemInstruction = finalSystemInstruction 
+        finalSystemInstruction = finalSystemInstruction
             ? `${finalSystemInstruction}\n\n${DEEP_SEARCH_SYSTEM_PROMPT}`
             : DEEP_SEARCH_SYSTEM_PROMPT;
     }
@@ -143,11 +143,11 @@ export const buildGenerationConfig = (
     // but we can omit the global config to avoid conflict, or set it if per-part isn't used.
     // However, if we are NOT Gemini 3, we MUST use global config.
     const isGemini3 = isGemini3Model(modelId);
-    
+
     if (!isGemini3 && mediaResolution) {
         // For non-Gemini 3 models, apply global resolution if specified
         generationConfig.mediaResolution = mediaResolution;
-    } 
+    }
     // Note: For Gemini 3, we don't set global mediaResolution here because we inject it into parts in `buildContentParts`.
     // The API documentation says per-part overrides global, but to be clean/explicit as requested ("become Per-part"), 
     // we skip global for G3.
@@ -203,6 +203,6 @@ export const buildGenerationConfig = (
         delete generationConfig.responseMimeType;
         delete generationConfig.responseSchema;
     }
-    
+
     return generationConfig;
 };

@@ -11,7 +11,7 @@ export const getModelIcon = (model: ModelOption | undefined) => {
     const lowerId = id.toLowerCase();
     if (lowerId.includes('tts')) return <Volume2 size={15} className="text-purple-500 dark:text-purple-400 flex-shrink-0" strokeWidth={1.5} />;
     if (lowerId.includes('imagen') || lowerId.includes('image-')) return <ImageIcon size={15} className="text-rose-500 dark:text-rose-400 flex-shrink-0" strokeWidth={1.5} />;
-    
+
     // Gemini Text Models
     if (lowerId.includes('gemini')) return <MessageSquareText size={15} className="text-sky-500 dark:text-sky-400 flex-shrink-0" strokeWidth={1.5} />;
 
@@ -24,15 +24,15 @@ export interface ModelPickerProps {
     selectedId: string;
     onSelect: (modelId: string) => void;
     t: (key: string) => string;
-    
+
     // Render props for the trigger button
-    renderTrigger: (props: { 
-        isOpen: boolean; 
-        setIsOpen: (v: boolean) => void; 
+    renderTrigger: (props: {
+        isOpen: boolean;
+        setIsOpen: (v: boolean) => void;
         selectedModel: ModelOption | undefined;
         ref: React.RefObject<any>;
     }) => React.ReactNode;
-    
+
     dropdownClassName?: string;
 }
 
@@ -47,7 +47,7 @@ export const ModelPicker: React.FC<ModelPickerProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [highlightedIndex, setHighlightedIndex] = useState(0);
-    
+
     const containerRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -72,8 +72,8 @@ export const ModelPicker: React.FC<ModelPickerProps> = ({
         let result = models;
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            result = result.filter(m => 
-                m.name.toLowerCase().includes(query) || 
+            result = result.filter(m =>
+                m.name.toLowerCase().includes(query) ||
                 m.id.toLowerCase().includes(query)
             );
         }
@@ -118,15 +118,15 @@ export const ModelPicker: React.FC<ModelPickerProps> = ({
 
     return (
         <div className="relative" ref={containerRef}>
-            {renderTrigger({ 
-                isOpen, 
-                setIsOpen, 
-                selectedModel, 
+            {renderTrigger({
+                isOpen,
+                setIsOpen,
+                selectedModel,
                 ref: containerRef // Providing ref but it's handled by parent click-outside usually
             })}
 
             {isOpen && (
-                <div 
+                <div
                     className={`absolute top-full left-0 mt-1 bg-[var(--theme-bg-secondary)] border border-[var(--theme-border-primary)] rounded-xl shadow-premium z-50 flex flex-col modal-enter-animation overflow-hidden ${dropdownClassName || 'w-full min-w-[280px] max-h-[300px]'}`}
                 >
                     {!models.length ? (
@@ -138,7 +138,7 @@ export const ModelPicker: React.FC<ModelPickerProps> = ({
                             <div className="px-2 py-2 sticky top-0 bg-[var(--theme-bg-secondary)] z-10">
                                 <div className="flex items-center gap-2 bg-[var(--theme-bg-input)] border border-[var(--theme-border-secondary)] rounded-lg px-2 py-1.5">
                                     <Search size={14} className="text-[var(--theme-text-tertiary)]" />
-                                    <input 
+                                    <input
                                         ref={searchInputRef}
                                         type="text"
                                         className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--theme-text-primary)] placeholder-[var(--theme-text-tertiary)] min-w-0"
@@ -157,19 +157,30 @@ export const ModelPicker: React.FC<ModelPickerProps> = ({
                                 </div>
                             </div>
 
-                            <div 
+                            <div
                                 ref={listRef}
-                                className="overflow-y-auto custom-scrollbar p-1 flex-grow" 
+                                className="overflow-y-auto custom-scrollbar p-1 flex-grow"
                                 role="listbox"
                             >
                                 {filteredModels.length > 0 ? (
                                     filteredModels.map((model, index) => {
                                         const prevModel = filteredModels[index - 1];
-                                        const showDivider = index > 0 && prevModel.isPinned && !model.isPinned;
+
+                                        // Grouping logic: Show provider header when provider changes
+                                        const showProviderHeader = !prevModel || prevModel.providerName !== model.providerName;
+                                        const showDivider = index > 0 && prevModel.isPinned && !model.isPinned && !showProviderHeader;
                                         const isSelected = model.id === selectedId;
 
                                         return (
                                             <React.Fragment key={model.id}>
+                                                {showProviderHeader && (
+                                                    <div className="px-3 py-1.5 mt-2 first:mt-0 sticky top-0 bg-[var(--theme-bg-secondary)] z-[5]">
+                                                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-tertiary)] flex items-center gap-1.5">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-border-focus)] opacity-70" />
+                                                            {model.providerName || t('header_model_provider_unknown') || 'Other'}
+                                                        </h3>
+                                                    </div>
+                                                )}
                                                 {showDivider && (
                                                     <div className="h-px bg-[var(--theme-border-secondary)] my-1 mx-2 opacity-50" />
                                                 )}
@@ -189,7 +200,7 @@ export const ModelPicker: React.FC<ModelPickerProps> = ({
                                                             {model.name}
                                                         </span>
                                                     </div>
-                                                    
+
                                                     <div className="flex items-center gap-1 flex-shrink-0">
                                                         {isSelected && <Check size={14} className="text-[var(--theme-text-link)]" strokeWidth={1.5} />}
                                                     </div>

@@ -4,6 +4,7 @@ import { SettingsModal } from '../settings/SettingsModal';
 import { LogViewer } from '../log-viewer/LogViewer';
 import { PreloadedMessagesModal } from '../scenarios/PreloadedMessagesModal';
 import { ExportChatModal } from './ExportChatModal';
+import { LoginModal } from './LoginModal';
 import { AVAILABLE_THEMES } from '../../constants/themeConstants';
 import { AppSettings, ModelOption, ChatSettings, SavedScenario } from '../../types';
 import { translations } from '../../utils/appUtils';
@@ -44,76 +45,89 @@ export interface AppModalsProps {
 
   t: (key: keyof typeof translations, fallback?: string) => string;
   setAvailableModels: (models: ModelOption[]) => void;
+
+  isLoginModalOpen: boolean;
+  setIsLoginModalOpen: (isOpen: boolean) => void;
+  handleLoginSuccess: () => void;
 }
 
 export const AppModals: React.FC<AppModalsProps> = (props) => {
-    const {
-        isSettingsModalOpen, setIsSettingsModalOpen, appSettings, availableModels,
-        handleSaveSettings, clearCacheAndReload,
-        clearAllHistory,
-        handleInstallPwa, installPromptEvent, isStandalone, 
-        handleImportSettings, handleExportSettings,
-        handleImportHistory, handleExportHistory,
-        handleImportAllScenarios, handleExportAllScenarios,
-        isPreloadedMessagesModalOpen, setIsPreloadedMessagesModalOpen, savedScenarios,
-        handleSaveAllScenarios, handleLoadPreloadedScenario,
-        isExportModalOpen, setIsExportModalOpen, handleExportChat, exportStatus,
-        isLogViewerOpen, setIsLogViewerOpen, currentChatSettings,
-        t, setAvailableModels
-    } = props;
-    
-    return (
-        <>
-          {isLogViewerOpen && (
-            <LogViewer
-                isOpen={isLogViewerOpen}
-                onClose={() => setIsLogViewerOpen(false)}
-                appSettings={appSettings}
-                currentChatSettings={currentChatSettings}
-            />
-          )}
-          {isSettingsModalOpen && (
-            <SettingsModal
-              isOpen={isSettingsModalOpen}
-              onClose={() => setIsSettingsModalOpen(false)}
-              currentSettings={appSettings}
-              availableModels={availableModels}
-              availableThemes={AVAILABLE_THEMES}
-              onSave={handleSaveSettings}
-              onClearAllHistory={clearAllHistory}
-              onClearCache={clearCacheAndReload}
-              onOpenLogViewer={() => setIsLogViewerOpen(true)}
-              onInstallPwa={handleInstallPwa}
-              isInstallable={!!installPromptEvent && !isStandalone}
-              onImportSettings={handleImportSettings}
-              onExportSettings={handleExportSettings}
-              onImportHistory={handleImportHistory}
-              onExportHistory={handleExportHistory}
-              onImportScenarios={handleImportAllScenarios}
-              onExportScenarios={handleExportAllScenarios}
-              t={t}
-              setAvailableModels={setAvailableModels}
-            />
-          )}
-          {isPreloadedMessagesModalOpen && (
-            <PreloadedMessagesModal
-              isOpen={isPreloadedMessagesModalOpen}
-              onClose={() => setIsPreloadedMessagesModalOpen(false)}
-              savedScenarios={savedScenarios}
-              onSaveAllScenarios={handleSaveAllScenarios}
-              onLoadScenario={handleLoadPreloadedScenario}
-              t={t}
-            />
-          )}
-          {isExportModalOpen && (
-              <ExportChatModal
-                isOpen={isExportModalOpen}
-                onClose={() => setIsExportModalOpen(false)}
-                onExport={handleExportChat}
-                exportStatus={exportStatus}
-                t={t}
-              />
-          )}
-        </>
-    );
+  const {
+    isSettingsModalOpen, setIsSettingsModalOpen, appSettings, availableModels,
+    handleSaveSettings, clearCacheAndReload,
+    clearAllHistory,
+    handleInstallPwa, installPromptEvent, isStandalone,
+    handleImportSettings, handleExportSettings,
+    handleImportHistory, handleExportHistory,
+    handleImportAllScenarios, handleExportAllScenarios,
+    isPreloadedMessagesModalOpen, setIsPreloadedMessagesModalOpen, savedScenarios,
+    handleSaveAllScenarios, handleLoadPreloadedScenario,
+    isExportModalOpen, setIsExportModalOpen, handleExportChat, exportStatus,
+    isLogViewerOpen, setIsLogViewerOpen, currentChatSettings,
+    t, setAvailableModels,
+    isLoginModalOpen, setIsLoginModalOpen, handleLoginSuccess
+  } = props;
+
+  return (
+    <>
+      {isLogViewerOpen && (
+        <LogViewer
+          isOpen={isLogViewerOpen}
+          onClose={() => setIsLogViewerOpen(false)}
+          appSettings={appSettings}
+          currentChatSettings={currentChatSettings}
+        />
+      )}
+      {isSettingsModalOpen && (
+        <SettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          currentSettings={appSettings}
+          availableModels={availableModels}
+          availableThemes={AVAILABLE_THEMES}
+          onSave={handleSaveSettings}
+          onClearAllHistory={clearAllHistory}
+          onClearCache={clearCacheAndReload}
+          onOpenLogViewer={() => setIsLogViewerOpen(true)}
+          onInstallPwa={handleInstallPwa}
+          isInstallable={!!installPromptEvent && !isStandalone}
+          onImportSettings={handleImportSettings}
+          onExportSettings={handleExportSettings}
+          onImportHistory={handleImportHistory}
+          onExportHistory={handleExportHistory}
+          onImportScenarios={handleImportAllScenarios}
+          onExportScenarios={handleExportAllScenarios}
+          t={t}
+          setAvailableModels={setAvailableModels}
+        />
+      )}
+      {isPreloadedMessagesModalOpen && (
+        <PreloadedMessagesModal
+          isOpen={isPreloadedMessagesModalOpen}
+          onClose={() => setIsPreloadedMessagesModalOpen(false)}
+          savedScenarios={savedScenarios}
+          onSaveAllScenarios={handleSaveAllScenarios}
+          onLoadScenario={handleLoadPreloadedScenario}
+          t={t}
+        />
+      )}
+      {isExportModalOpen && (
+        <ExportChatModal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          onExport={handleExportChat}
+          exportStatus={exportStatus}
+          t={t}
+        />
+      )}
+      {isLoginModalOpen && (
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          onClose={() => setIsLoginModalOpen(false)}
+          onSuccess={handleLoginSuccess}
+          t={t}
+        />
+      )}
+    </>
+  );
 }

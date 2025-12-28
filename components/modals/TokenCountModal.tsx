@@ -38,39 +38,11 @@ export const TokenCountModal: React.FC<TokenCountModalProps> = ({
 
     const performCalculation = async (txt: string, fls: UploadedFile[], modelId: string) => {
         if (!txt.trim() && fls.length === 0) return;
-        
+
         setIsLoading(true);
-        setError(null);
+        setError("Token calculation is temporarily unavailable as we migrate to the SparkX backend. Actual token usage will be shown after each message completes.");
         setTokenCount(null);
-
-        // We use a temporary settings object to derive the key, assuming current settings context
-        const tempSettings = { ...appSettings, modelId: modelId };
-        const keyResult = getKeyForRequest(appSettings, tempSettings, { skipIncrement: true });
-
-        if ('error' in keyResult) {
-            setError(keyResult.error);
-            setIsLoading(false);
-            return;
-        }
-
-        try {
-            // Build parts (this handles file reading/base64 conversion)
-            // Pass mediaResolution to ensure token count reflects the resolution setting
-            const { contentParts } = await buildContentParts(txt, fls, modelId, appSettings.mediaResolution);
-            
-            if (contentParts.length === 0) {
-                setTokenCount(0);
-                return;
-            }
-
-            const count = await geminiServiceInstance.countTokens(keyResult.key, modelId, contentParts);
-            setTokenCount(count);
-        } catch (err) {
-            console.error("Token calculation failed", err);
-            setError(err instanceof Error ? err.message : "Failed to calculate tokens");
-        } finally {
-            setIsLoading(false);
-        }
+        setIsLoading(false);
     };
 
     // Reset state and Auto-Calculate when modal opens
@@ -120,9 +92,9 @@ export const TokenCountModal: React.FC<TokenCountModalProps> = ({
     const displayModelName = availableModels.find(m => m.id === selectedModelId)?.name || selectedModelId;
 
     return (
-        <Modal 
-            isOpen={isOpen} 
-            onClose={onClose} 
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
             contentClassName="w-full max-w-2xl bg-[var(--theme-bg-primary)] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-[var(--theme-border-primary)] max-h-[85vh]"
             noPadding
         >
@@ -138,7 +110,7 @@ export const TokenCountModal: React.FC<TokenCountModalProps> = ({
             </div>
 
             <div className="flex-grow flex flex-col min-h-0 overflow-y-auto custom-scrollbar p-5 space-y-5">
-                
+
                 {/* Model Selection */}
                 <div className="space-y-2">
                     <label className="text-xs font-bold uppercase text-[var(--theme-text-tertiary)] tracking-wider">
@@ -181,22 +153,22 @@ export const TokenCountModal: React.FC<TokenCountModalProps> = ({
                         <label className="text-xs font-bold uppercase text-[var(--theme-text-tertiary)] tracking-wider">
                             {t('tokenModal_files')}
                         </label>
-                        <button 
+                        <button
                             onClick={() => fileInputRef.current?.click()}
                             className="text-xs flex items-center gap-1 text-[var(--theme-text-link)] hover:underline"
                         >
                             <Plus size={12} /> {t('add')}
                         </button>
-                        <input 
-                            type="file" 
-                            multiple 
-                            ref={fileInputRef} 
-                            onChange={handleFileChange} 
-                            className="hidden" 
-                            accept={ALL_SUPPORTED_MIME_TYPES.join(',')} 
+                        <input
+                            type="file"
+                            multiple
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                            className="hidden"
+                            accept={ALL_SUPPORTED_MIME_TYPES.join(',')}
                         />
                     </div>
-                    
+
                     {files.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                             {files.map(file => (
@@ -206,7 +178,7 @@ export const TokenCountModal: React.FC<TokenCountModalProps> = ({
                                     </span>
                                     <span className="max-w-[150px] truncate text-[var(--theme-text-primary)]" title={file.name}>{file.name}</span>
                                     <span className="text-[var(--theme-text-tertiary)]">({formatFileSize(file.size)})</span>
-                                    <button 
+                                    <button
                                         onClick={() => removeFile(file.id)}
                                         className="ml-1 text-[var(--theme-text-tertiary)] hover:text-[var(--theme-text-danger)] opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
@@ -242,14 +214,14 @@ export const TokenCountModal: React.FC<TokenCountModalProps> = ({
                 </div>
 
                 <div className="flex gap-3">
-                    <button 
+                    <button
                         onClick={() => { setText(''); setFiles([]); setTokenCount(null); }}
                         className="px-4 py-2 text-sm font-medium text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-tertiary)] rounded-lg transition-colors flex items-center gap-2"
                         title="Clear All"
                     >
                         <Trash2 size={16} /> <span className="hidden sm:inline">{t('tokenModal_clear')}</span>
                     </button>
-                    <button 
+                    <button
                         onClick={handleCalculateClick}
                         disabled={isLoading || (!text.trim() && files.length === 0)}
                         className="px-5 py-2 text-sm font-bold bg-[var(--theme-bg-accent)] hover:bg-[var(--theme-bg-accent-hover)] text-[var(--theme-text-accent)] rounded-lg shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 active:scale-95"

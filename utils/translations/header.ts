@@ -21,4 +21,5 @@ export const headerTranslations = {
     headerModelAriaLabel_current: { en: 'Current AI Model', zh: '当前 AI 模型' },
     headerModelAriaLabel_action: { en: `Click to change model`, zh: `点击更改模型` },
     header_model_search_placeholder: { en: 'Search models...', zh: '搜索模型...' },
+    header_model_provider_unknown: { en: 'Other Providers', zh: '其他厂商' },
 };

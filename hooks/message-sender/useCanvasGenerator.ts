@@ -23,18 +23,10 @@ export const useCanvasGenerator = ({
 
     const handleGenerateCanvas = useCallback(async (sourceMessageId: string, content: string) => {
         if (activeJobs.current.size > 0 && Array.from(activeJobs.current.keys()).some(id => messages.find(m => m.id === id)?.isLoading)) {
-             // Optional: concurrency check
+            // Optional: concurrency check
         }
-        
-        if (!activeSessionId) return;
 
-        // 1. Get Key
-        const keyResult = getKeyForRequest(appSettings, currentChatSettings, { skipIncrement: true });
-        if ('error' in keyResult) {
-            setAppFileError(keyResult.error);
-            return;
-        }
-        const { key: keyToUse } = keyResult;
+        if (!activeSessionId) return;
 
         // 2. Prepare IDs and State
         const generationId = generateUniqueId();
@@ -57,10 +49,10 @@ export const useCanvasGenerator = ({
                     generationStartTime,
                     excludeFromContext: true // Don't include this generated canvas message in future AI context
                 };
-                
+
                 const newMessages = [...s.messages];
                 newMessages.splice(insertIndex, 0, newMsg);
-                
+
                 return { ...s, messages: newMessages };
             }
             return s;
@@ -72,7 +64,7 @@ export const useCanvasGenerator = ({
         // Define specific settings for Canvas generation
         const canvasModelId = appSettings.autoCanvasModelId || 'gemini-3-flash-preview';
         const canvasThinkingLevel = 'HIGH';
-        
+
         // Create a transient settings object for the stream handler to ensure accurate logging
         const canvasSettings = {
             ...currentChatSettings,
@@ -84,26 +76,11 @@ export const useCanvasGenerator = ({
 
         // 4. Prepare Stream Handlers
         const { streamOnError, streamOnComplete, streamOnPart, onThoughtChunk } = getStreamHandlers(
-            activeSessionId, 
-            generationId, 
-            newAbortController, 
-            generationStartTime, 
+            activeSessionId,
+            generationId,
+            newAbortController,
+            generationStartTime,
             canvasSettings
-        );
-
-        // 5. Build Config
-        const config = buildGenerationConfig(
-            canvasModelId,
-            CANVAS_SYSTEM_PROMPT, // Use Canvas Prompt
-            { temperature: 0.7, topP: 0.95 },
-            true, // Force showThoughts
-            0, // Force budget 0 to use level
-            false, // Disable tools for canvas generation to focus on HTML output
-            false,
-            false,
-            canvasThinkingLevel,
-            aspectRatio,
-            false
         );
 
         // Prepare prompt with instruction
@@ -111,19 +88,33 @@ export const useCanvasGenerator = ({
         const promptInstruction = t('suggestion_html_desc');
         const finalPrompt = `${promptInstruction}\n\n${content}`;
 
+        const { sparkxChatStreamApi } = await import('../../services/api/sparkxChatApi');
+
         try {
-            // 6. Call API (Stateless: Only send the source content as user prompt)
-            await geminiServiceInstance.sendMessageStream(
-                keyToUse,
-                canvasModelId, // Use configured model
-                [], // Empty history implies independent generation
-                [{ text: finalPrompt }], // Use combined instruction + content
-                config,
+            await sparkxChatStreamApi(
+                {
+                    sessionId: activeSessionId,
+                    modelId: canvasModelId,
+                    content: finalPrompt
+                },
                 newAbortController.signal,
-                streamOnPart,
-                onThoughtChunk,
-                streamOnError,
-                streamOnComplete
+                (msg) => {
+                    switch (msg.type) {
+                        case 'content':
+                            if (msg.delta) streamOnPart({ text: msg.delta });
+                            break;
+                        case 'thought':
+                            if (msg.delta) onThoughtChunk(msg.delta);
+                            break;
+                        case 'done':
+                            streamOnComplete(msg.metadata?.usage, msg.metadata?.grounding, msg.metadata?.urlContext);
+                            break;
+                        case 'error':
+                            streamOnError(new Error(msg.delta || 'Unknown backend error'));
+                            break;
+                    }
+                },
+                streamOnError
             );
         } catch (error) {
             streamOnError(error instanceof Error ? error : new Error(String(error)));

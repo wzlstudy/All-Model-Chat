@@ -23,7 +23,7 @@ interface UseSubmissionHandlersProps {
     setIsAnimatingSend: Dispatch<SetStateAction<boolean>>;
     isFullscreen: boolean;
     setIsFullscreen: Dispatch<SetStateAction<boolean>>;
-    
+
     // Translation props
     isTranslating: boolean;
     setIsTranslating: Dispatch<SetStateAction<boolean>>;
@@ -77,7 +77,7 @@ export const useSubmissionHandlers = ({
                 }
 
                 clearCurrentDraft();
-                
+
                 let textToSend = inputText;
                 if (quoteText) {
                     const formattedQuote = quoteText.split('\n').map(l => `> ${l}`).join('\n');
@@ -103,24 +103,33 @@ export const useSubmissionHandlers = ({
         setIsTranslating(true);
         setAppFileError(null);
 
-        const keyResult = getKeyForRequest(appSettings, currentChatSettings, { skipIncrement: true });
-        if ('error' in keyResult) {
-            setAppFileError(keyResult.error);
-            setIsTranslating(false);
-            return;
-        }
-
         try {
-            const translatedText = await geminiServiceInstance.translateText(keyResult.key, inputText);
-            setInputText(translatedText);
-            setTimeout(() => adjustTextareaHeight(), 0);
+            const { sparkxChatNonStreamApi } = await import('../../services/api/sparkxChatApi');
+
+            const targetLang = appSettings.language === 'zh' ? 'Chinese' : 'English';
+            const prompt = `Translate the following text to ${targetLang}. Only return the translated text without any explanations or quotes:\n\n${inputText}`;
+
+            const translatedText = await sparkxChatNonStreamApi(
+                {
+                    sessionId: 'translation-temp',
+                    modelId: currentChatSettings.modelId || appSettings.modelId,
+                    content: prompt,
+                    saveHistory: false
+                },
+                new AbortController().signal
+            );
+
+            if (translatedText && translatedText.trim()) {
+                setInputText(translatedText.trim());
+                setTimeout(() => adjustTextareaHeight(), 0);
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Translation failed.";
             setAppFileError(errorMessage);
         } finally {
             setIsTranslating(false);
         }
-    }, [inputText, isTranslating, setAppFileError, appSettings, currentChatSettings, setInputText, adjustTextareaHeight]);
+    }, [inputText, isTranslating, setAppFileError, appSettings.language, appSettings.modelId, currentChatSettings.modelId, setInputText, adjustTextareaHeight]);
 
     return {
         handleSubmit,

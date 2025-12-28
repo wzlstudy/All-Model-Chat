@@ -57,9 +57,9 @@ export const useMessageSender = (props: MessageSenderProps) => {
     const { getStreamHandlers } = useChatStreamHandler(props);
 
     // Initialize Sub-Hooks
-    const { handleGenerateCanvas } = useCanvasGenerator({ 
-        ...props, 
-        getStreamHandlers 
+    const { handleGenerateCanvas } = useCanvasGenerator({
+        ...props,
+        getStreamHandlers
     });
 
     const { sendStandardMessage } = useStandardChat({
@@ -81,7 +81,7 @@ export const useMessageSender = (props: MessageSenderProps) => {
         const textToUse = overrideOptions?.text ?? '';
         const filesToUse = overrideOptions?.files ?? selectedFiles;
         const effectiveEditingId = overrideOptions?.editingId ?? editingMessageId;
-        
+
         const sessionToUpdate = currentChatSettings;
         const activeModelId = sessionToUpdate.modelId;
         const isTtsModel = activeModelId.includes('-tts');
@@ -96,31 +96,39 @@ export const useMessageSender = (props: MessageSenderProps) => {
         // Basic Validation
         if (!textToUse.trim() && !isTtsModel && !isImagenModel && filesToUse.filter(f => f.uploadState === 'active').length === 0) return;
         if ((isTtsModel || isImagenModel || isImageEditModel || isGemini3Image) && !textToUse.trim()) return;
-        if (filesToUse.some(f => f.isProcessing || (f.uploadState !== 'active' && !f.error) )) { 
+        if (filesToUse.some(f => f.isProcessing || (f.uploadState !== 'active' && !f.error))) {
             logService.warn("Send message blocked: files are still processing.");
-            setAppFileError("Wait for files to finish processing."); 
-            return; 
+            setAppFileError("Wait for files to finish processing.");
+            return;
         }
-        
+
+        // Login Check
+        const { currentUser, setIsLoginModalOpen } = (props as any);
+        if (!currentUser) {
+            logService.warn("Send message blocked: User not logged in.");
+            setIsLoginModalOpen(true);
+            return;
+        }
+
         setAppFileError(null);
 
-        if (!activeModelId) { 
+        if (!activeModelId) {
             logService.error("Send message failed: No model selected.");
             const errorMsg: ChatMessage = { id: generateUniqueId(), role: 'error', content: 'No model selected.', timestamp: new Date() };
             const newSession = createNewSession({ ...DEFAULT_CHAT_SETTINGS, ...appSettings }, [errorMsg], "Error");
             updateAndPersistSessions(p => [newSession, ...p]);
             setActiveSessionId(newSession.id);
-            return; 
+            return;
         }
 
         // Prepare Key
         const keyResult = getKeyForRequest(appSettings, sessionToUpdate);
         if ('error' in keyResult) {
             logService.error("Send message failed: API Key not configured.");
-             const errorMsg: ChatMessage = { id: generateUniqueId(), role: 'error', content: keyResult.error, timestamp: new Date() };
-             const newSession = createNewSession({ ...DEFAULT_CHAT_SETTINGS, ...appSettings }, [errorMsg], "API Key Error");
-             updateAndPersistSessions(p => [newSession, ...p]);
-             setActiveSessionId(newSession.id);
+            const errorMsg: ChatMessage = { id: generateUniqueId(), role: 'error', content: keyResult.error, timestamp: new Date() };
+            const newSession = createNewSession({ ...DEFAULT_CHAT_SETTINGS, ...appSettings }, [errorMsg], "API Key Error");
+            updateAndPersistSessions(p => [newSession, ...p]);
+            setActiveSessionId(newSession.id);
             return;
         }
         const { key: keyToUse, isNewKey } = keyResult;
@@ -129,7 +137,7 @@ export const useMessageSender = (props: MessageSenderProps) => {
         // Setup common params
         const newAbortController = new AbortController();
         const generationId = generateUniqueId();
-        
+
         if (appSettings.isAutoScrollOnSendEnabled) {
             userScrolledUp.current = false;
         }
@@ -141,7 +149,7 @@ export const useMessageSender = (props: MessageSenderProps) => {
             if (editingMessageId) setEditingMessageId(null);
             return;
         }
-        
+
         // Use image edit flow for:
         // 1. Explicit image edit models (e.g. flash-image)
         // 2. Gemini 3 Pro Image IF Quad Images are enabled (for parallel generation)
@@ -152,7 +160,7 @@ export const useMessageSender = (props: MessageSenderProps) => {
             if (editingMessageId) setEditingMessageId(null);
             return;
         }
-        
+
         // Standard Chat Flow
         await sendStandardMessage(textToUse, filesToUse, effectiveEditingId, activeModelId);
 

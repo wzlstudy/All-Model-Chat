@@ -4,17 +4,18 @@ import { ChatMessage, SavedScenario, SavedChatSession, AppSettings } from '../ty
 import { generateUniqueId, generateSessionTitle, logService, createNewSession } from '../utils/appUtils';
 import { DEFAULT_CHAT_SETTINGS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants/appConstants';
 import { dbService } from '../utils/db';
-import { 
-    fopScenario, 
-    unrestrictedScenario, 
-    pyriteScenario, 
-    annaScenario, 
-    voxelScenario, 
-    reasonerScenario, 
-    succinctScenario, 
-    socraticScenario, 
+import { getScenariosApi, saveScenarioApi, deleteScenarioApi } from '../services/api/sparkxChatApi';
+import {
+    fopScenario,
+    unrestrictedScenario,
+    pyriteScenario,
+    annaScenario,
+    voxelScenario,
+    reasonerScenario,
+    succinctScenario,
+    socraticScenario,
     formalScenario,
-    SYSTEM_SCENARIO_IDS 
+    SYSTEM_SCENARIO_IDS
 } from '../constants/defaultScenarios';
 
 type SessionsUpdater = (updater: (prev: SavedChatSession[]) => SavedChatSession[], options?: { persist?: boolean }) => Promise<void>;
@@ -32,45 +33,70 @@ export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPe
     useEffect(() => {
         const loadScenarios = async () => {
             try {
+                // 1. Load from Local DB first for immediate UI
                 const storedScenarios = await dbService.getAllScenarios();
-                let scenariosToSet = storedScenarios;
+                let localScenarios = storedScenarios;
 
-                // 2. Seed Jailbreak Scenarios (FOP, Pyrite, Unrestricted) as User Scenarios
+                // 2. Fetch from Backend to sync
+                const remoteScenariosMapped = await getScenariosApi();
+                // Map backend Entity to frontend SavedScenario if necessary
+                const remoteScenarios: SavedScenario[] = remoteScenariosMapped.map((s: any) => ({
+                    id: s.scenarioId,
+                    title: s.title,
+                    systemInstruction: s.systemInstruction,
+                    messages: s.messages
+                }));
+
+                // 3. Seed Jailbreak Scenarios if missing (local first run)
                 const hasSeededJailbreaks = localStorage.getItem('hasSeededJailbreaks_v1');
                 if (!hasSeededJailbreaks) {
                     const jailbreaks = [fopScenario, unrestrictedScenario, pyriteScenario];
-                    // Append if not already present by ID
-                    const newScenarios = jailbreaks.filter(jb => !scenariosToSet.some(s => s.id === jb.id));
-                    if (newScenarios.length > 0) {
-                        scenariosToSet = [...scenariosToSet, ...newScenarios];
-                    }
+                    localScenarios = [...localScenarios, ...jailbreaks.filter(jb => !localScenarios.some(s => s.id === jb.id))];
                 }
 
-                // 3. Seed Anna Scenario (v1 check)
+                // 4. Seed Anna Scenario
                 const hasSeededAnna = localStorage.getItem('hasSeededAnna_v1');
                 if (!hasSeededAnna) {
-                    const anna = [annaScenario];
-                    const newScenarios = anna.filter(a => !scenariosToSet.some(s => s.id === a.id));
-                    if (newScenarios.length > 0) {
-                        scenariosToSet = [...scenariosToSet, ...newScenarios];
+                    localScenarios = [...localScenarios, ...[annaScenario].filter(a => !localScenarios.some(s => s.id === a.id))];
+                }
+
+                // Merge remote into local (remote wins if same ID)
+                let finalScenarios = [...localScenarios];
+                remoteScenarios.forEach(rs => {
+                    const idx = finalScenarios.findIndex(fs => fs.id === rs.id);
+                    if (idx > -1) {
+                        finalScenarios[idx] = rs;
+                    } else {
+                        finalScenarios.push(rs);
                     }
-                }
+                });
 
-                // Save if any changes were made
+                // Update Local and State
+                await dbService.setAllScenarios(finalScenarios);
+                setUserSavedScenarios(finalScenarios);
+
+                // Mark seeded
+                if (!hasSeededJailbreaks) localStorage.setItem('hasSeededJailbreaks_v1', 'true');
+                if (!hasSeededAnna) localStorage.setItem('hasSeededAnna_v1', 'true');
+
+                // Proactively sync seeded scenarios to backend if they were just added
                 if (!hasSeededJailbreaks || !hasSeededAnna) {
-                    await dbService.setAllScenarios(scenariosToSet);
-                    if (!hasSeededJailbreaks) localStorage.setItem('hasSeededJailbreaks_v1', 'true');
-                    if (!hasSeededAnna) localStorage.setItem('hasSeededAnna_v1', 'true');
+                    const scenariosToSync = finalScenarios.filter(s => !SYSTEM_SCENARIO_IDS.includes(s.id));
+                    await Promise.all(scenariosToSync.map(s => saveScenarioApi({
+                        scenarioId: s.id,
+                        title: s.title,
+                        systemInstruction: s.systemInstruction,
+                        messages: s.messages
+                    })));
                 }
 
-                setUserSavedScenarios(scenariosToSet);
             } catch (error) {
                 logService.error("Error loading preloaded scenarios:", { error });
             }
         };
         loadScenarios();
     }, []);
-    
+
     const savedScenarios = useMemo(() => {
         // Ensure user-saved scenarios don't conflict with the default IDs
         const filteredUserScenarios = userSavedScenarios.filter(s => !SYSTEM_SCENARIO_IDS.includes(s.id));
@@ -78,22 +104,44 @@ export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPe
             // FOP, Unrestricted, Pyrite, Anna are now in filteredUserScenarios
             voxelScenario,
             reasonerScenario,
-            succinctScenario, 
-            socraticScenario, 
-            formalScenario, 
+            succinctScenario,
+            socraticScenario,
+            formalScenario,
             ...filteredUserScenarios
         ];
     }, [userSavedScenarios]);
 
-    const handleSaveAllScenarios = (updatedScenarios: SavedScenario[]) => { 
+    const handleSaveAllScenarios = async (updatedScenarios: SavedScenario[]) => {
         // Filter out the default scenarios so they are not saved to the user's database
-        const scenariosToSave = updatedScenarios.filter(s => !SYSTEM_SCENARIO_IDS.includes(s.id));
-        setUserSavedScenarios(scenariosToSave); 
-        dbService.setAllScenarios(scenariosToSave).catch(error => {
+        const scenariosToSync = updatedScenarios.filter(s => !SYSTEM_SCENARIO_IDS.includes(s.id));
+
+        // Find deleted scenarios
+        const currentIds = userSavedScenarios.map(s => s.id);
+        const newIds = scenariosToSync.map(s => s.id);
+        const deletedIds = currentIds.filter(id => !newIds.includes(id));
+
+        setUserSavedScenarios(scenariosToSync);
+        await dbService.setAllScenarios(scenariosToSync).catch(error => {
             logService.error("Failed to save scenarios to DB", { error });
         });
+
+        // Sync to Backend
+        try {
+            // 1. Save/Update new and existing
+            await Promise.all(scenariosToSync.map(s => saveScenarioApi({
+                scenarioId: s.id,
+                title: s.title,
+                systemInstruction: s.systemInstruction,
+                messages: s.messages
+            })));
+
+            // 2. Delete removed
+            await Promise.all(deletedIds.map(id => deleteScenarioApi(id)));
+        } catch (error) {
+            logService.error("Failed to sync scenarios to backend", { error });
+        }
     };
-    
+
     const handleLoadPreloadedScenario = (scenarioToLoad: SavedScenario) => {
         const messages: ChatMessage[] = scenarioToLoad.messages.map(pm => ({
             ...pm,
@@ -111,7 +159,7 @@ export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPe
         };
 
         const title = scenarioToLoad.title || generateSessionTitle(messages) || 'New Chat';
-        
+
         const newSession = createNewSession(sessionSettings, messages, title);
 
         updateAndPersistSessions(prev => [newSession, ...prev.filter(s => s.messages.length > 0)]);

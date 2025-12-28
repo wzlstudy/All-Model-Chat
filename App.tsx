@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { useAppLogic } from './hooks/app/useAppLogic';
 import { useAppProps } from './hooks/app/useAppProps';
@@ -10,18 +10,17 @@ import { MainLayout } from './components/layout/MainLayout';
 import { AppModals } from './components/modals/AppModals';
 
 const App: React.FC = () => {
-  const [activeModule, setActiveModule] = useState('chat');
   const logic = useAppLogic();
   const {
     currentTheme,
     pipState,
-    chatState,
     sidePanelContent,
     handleCloseSidePanel,
     uiState,
+    activeModule,
   } = logic;
 
-  const { sidebarProps, chatAreaProps, appModalsProps } = useAppProps(logic);
+  const { sidebarProps, chatAreaProps, appModalsProps, layoutProps } = useAppProps(logic);
 
   const renderModuleContent = () => {
     if (activeModule === 'chat') {
@@ -53,12 +52,7 @@ const App: React.FC = () => {
       onTouchStart={uiState.handleTouchStart}
       onTouchEnd={uiState.handleTouchEnd}
     >
-      <MainLayout
-        activeModule={activeModule}
-        onModuleChange={setActiveModule}
-        onOpenSettings={() => uiState.setIsSettingsModalOpen(true)}
-        t={logic.t}
-      >
+      <MainLayout {...layoutProps}>
         <WindowProvider window={pipState.pipWindow || window} document={pipState.pipWindow?.document || document}>
           {pipState.isPipActive && pipState.pipContainer && pipState.pipWindow ? (
             <>

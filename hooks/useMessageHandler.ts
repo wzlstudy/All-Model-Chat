@@ -33,14 +33,17 @@ interface MessageHandlerProps {
     scrollContainerRef: React.RefObject<HTMLDivElement>;
     sessionKeyMapRef: React.MutableRefObject<Map<string, string>>;
     language: 'en' | 'zh';
+
+    currentUser: any | null;
+    setIsLoginModalOpen: (isOpen: boolean) => void;
 }
 
 export const useMessageHandler = (props: MessageHandlerProps) => {
-    const { 
-        messages, 
-        isLoading, 
-        activeSessionId, 
-        editingMessageId, 
+    const {
+        messages,
+        isLoading,
+        activeSessionId,
+        editingMessageId,
         activeJobs,
         setCommandedInput,
         setSelectedFiles,
@@ -51,9 +54,9 @@ export const useMessageHandler = (props: MessageHandlerProps) => {
         userScrolledUp,
         setLoadingSessionIds
     } = props;
-    
+
     const { handleSendMessage, handleGenerateCanvas } = useMessageSender(props);
-    
+
     const messageActions = useMessageActions({
         messages,
         isLoading,
@@ -70,7 +73,7 @@ export const useMessageHandler = (props: MessageHandlerProps) => {
         handleSendMessage,
         setLoadingSessionIds,
     });
-    
+
     const { handleTextToSpeech } = useTextToSpeechHandler(props);
 
     return {

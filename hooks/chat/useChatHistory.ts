@@ -4,6 +4,13 @@ import { AppSettings, ChatMessage, SavedChatSession, UploadedFile, ChatSettings,
 import { DEFAULT_CHAT_SETTINGS } from '../../constants/appConstants';
 import { createNewSession, logService, getTranslator } from '../../utils/appUtils';
 import { dbService } from '../../utils/db';
+import {
+    getSessionsApi,
+    getSessionMessagesApi,
+    deleteSessionApi,
+    renameSessionApi,
+    pinSessionApi
+} from '../../services/api/sparkxChatApi';
 import { SUPPORTED_IMAGE_MIME_TYPES } from '../../constants/fileConstants';
 
 type CommandedInputSetter = Dispatch<SetStateAction<InputCommand | null>>;
@@ -78,7 +85,7 @@ export const useChatHistory = ({
     const startNewChat = useCallback(() => {
         logService.info('Starting new chat session.');
         userScrolledUp.current = false;
-        
+
         // Save current files to draft before switching
         if (activeSessionId) {
             fileDraftsRef.current[activeSessionId] = selectedFiles;
@@ -107,18 +114,18 @@ export const useChatHistory = ({
         // Don't force clear text (handled by localStorage draft for new ID)
         // Clear files for new chat
         setSelectedFiles([]);
-        
+
         setEditingMessageId(null);
-        
+
         setTimeout(() => {
             document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Chat message input"]')?.focus();
         }, 0);
     }, [appSettings, activeChat, updateAndPersistSessions, setActiveSessionId, setCommandedInput, setSelectedFiles, setEditingMessageId, userScrolledUp, activeSessionId, selectedFiles, fileDraftsRef]);
 
-    const loadChatSession = useCallback((sessionId: string, allSessions: SavedChatSession[]) => {
+    const loadChatSession = useCallback(async (sessionId: string, allSessions: SavedChatSession[]) => {
         logService.info(`Loading chat session: ${sessionId}`);
         userScrolledUp.current = false;
-        
+
         // Save current files to draft before switching
         if (activeSessionId) {
             fileDraftsRef.current[activeSessionId] = selectedFiles;
@@ -126,16 +133,42 @@ export const useChatHistory = ({
 
         const sessionToLoad = allSessions.find(s => s.id === sessionId);
         if (sessionToLoad) {
-            setActiveSessionId(sessionToLoad.id);
+            // Fetch messages from backend for this session
+            const backendMessages = await getSessionMessagesApi(sessionId);
+
+            // Map backend messages to frontend ChatMessage structure
+            const mappedMessages: ChatMessage[] = backendMessages.map(m => ({
+                id: m.messageId,
+                role: m.role,
+                content: m.content || '',
+                thoughts: m.thought,
+                files: m.files || [],
+                timestamp: new Date(m.createTime),
+                thinkingTimeMs: m.metrics?.thinkingTimeMs,
+                firstTokenTimeMs: m.metrics?.firstTokenTimeMs,
+                promptTokens: m.inputTokens,
+                completionTokens: m.outputTokens,
+                totalTokens: m.totalTokens,
+                suggestions: m.suggestions || [],
+            }));
+
+            const fullSession: SavedChatSession = {
+                ...sessionToLoad,
+                messages: mappedMessages,
+            };
+
+            // Update state with full session data
+            updateAndPersistSessions(prev =>
+                prev.map(s => s.id === sessionId ? fullSession : s)
+            );
+
+            setActiveSessionId(sessionId);
             dbService.setActiveSessionId(sessionId);
-            
+
             // Restore files from draft for the target session, or empty if none
             const draftFiles = fileDraftsRef.current[sessionId] || [];
             setSelectedFiles(draftFiles);
-            
-            // Don't force clear text command (handled by localStorage draft)
-            // setCommandedInput({ text: '', id: Date.now() });
-            
+
             setEditingMessageId(null);
             setTimeout(() => {
                 document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Chat message input"]')?.focus();
@@ -144,28 +177,38 @@ export const useChatHistory = ({
             logService.warn(`Session ${sessionId} not found. Starting new chat.`);
             startNewChat();
         }
-    }, [setActiveSessionId, setCommandedInput, setSelectedFiles, setEditingMessageId, startNewChat, userScrolledUp, activeSessionId, selectedFiles, fileDraftsRef]);
+    }, [setActiveSessionId, setCommandedInput, setSelectedFiles, setEditingMessageId, startNewChat, userScrolledUp, activeSessionId, selectedFiles, fileDraftsRef, updateAndPersistSessions]);
 
     const loadInitialData = useCallback(async () => {
         try {
-            logService.info('Attempting to load chat history from IndexedDB.');
-            const [sessions, groups, storedActiveId] = await Promise.all([
-                dbService.getAllSessions(),
+            logService.info('Attempting to load chat history from Backend & IndexedDB.');
+            const [backendSessions, groups, storedActiveId] = await Promise.all([
+                getSessionsApi(),
                 dbService.getAllGroups(),
                 dbService.getActiveSessionId()
             ]);
 
-            const rehydratedSessions = sessions.map(rehydrateSessionFiles);
-            rehydratedSessions.sort((a,b) => b.timestamp - a.timestamp);
-            
-            setSavedSessions(rehydratedSessions);
-            setSavedGroups(groups.map(g => ({...g, isExpanded: g.isExpanded ?? true})));
+            // Map backend sessions to frontend SavedChatSession (stub messages for list)
+            const sessions: SavedChatSession[] = backendSessions.map(s => ({
+                id: s.sessionId,
+                title: s.title || 'Untitled',
+                timestamp: new Date(s.updateTime || s.createTime).getTime(),
+                messages: [], // Will load on demand
+                settings: s.settings || { ...DEFAULT_CHAT_SETTINGS, ...appSettings, modelId: s.modelId },
+                isPinned: s.isPinned,
+                groupId: s.groupId
+            }));
 
-            if (storedActiveId && rehydratedSessions.find(s => s.id === storedActiveId)) {
-                loadChatSession(storedActiveId, rehydratedSessions);
-            } else if (rehydratedSessions.length > 0) {
+            sessions.sort((a, b) => b.timestamp - a.timestamp);
+
+            setSavedSessions(sessions);
+            setSavedGroups(groups.map(g => ({ ...g, isExpanded: g.isExpanded ?? true })));
+
+            if (storedActiveId && sessions.find(s => s.id === storedActiveId)) {
+                loadChatSession(storedActiveId, sessions);
+            } else if (sessions.length > 0) {
                 logService.info('No active session ID, loading most recent session.');
-                loadChatSession(rehydratedSessions[0].id, rehydratedSessions);
+                loadChatSession(sessions[0].id, sessions);
             } else {
                 logService.info('No history found, starting fresh chat.');
                 startNewChat();
@@ -174,38 +217,60 @@ export const useChatHistory = ({
             logService.error("Error loading chat history:", error);
             startNewChat();
         }
-    }, [setSavedSessions, setSavedGroups, loadChatSession, startNewChat]);
-    
-    const handleDeleteChatHistorySession = useCallback((sessionId: string) => {
+    }, [setSavedSessions, setSavedGroups, loadChatSession, startNewChat, appSettings]);
+
+    const handleDeleteChatHistorySession = useCallback(async (sessionId: string) => {
         logService.info(`Deleting session: ${sessionId}`);
+
+        // Sync with backend
+        const success = await deleteSessionApi(sessionId);
+        if (!success) {
+            logService.error(`Failed to delete session ${sessionId} on backend.`);
+        }
+
         updateAndPersistSessions(prev => {
-             const sessionToDelete = prev.find(s => s.id === sessionId);
-             if (sessionToDelete) {
-                 sessionToDelete.messages.forEach(msg => {
-                     if(msg.isLoading && activeJobs.current.has(msg.id)) {
-                         activeJobs.current.get(msg.id)?.abort();
-                         activeJobs.current.delete(msg.id);
-                     }
-                 });
-             }
-             return prev.filter(s => s.id !== sessionId);
+            const sessionToDelete = prev.find(s => s.id === sessionId);
+            if (sessionToDelete) {
+                sessionToDelete.messages.forEach(msg => {
+                    if (msg.isLoading && activeJobs.current.has(msg.id)) {
+                        activeJobs.current.get(msg.id)?.abort();
+                        activeJobs.current.delete(msg.id);
+                    }
+                });
+            }
+            return prev.filter(s => s.id !== sessionId);
         });
-        // The logic to switch to a new active session is now handled declaratively in useChat.ts's useEffect.
     }, [updateAndPersistSessions, activeJobs]);
-    
-    const handleRenameSession = useCallback((sessionId: string, newTitle: string) => {
+
+    const handleRenameSession = useCallback(async (sessionId: string, newTitle: string) => {
         if (!newTitle.trim()) return;
         logService.info(`Renaming session ${sessionId} to "${newTitle}"`);
+
+        // Local update
         updateAndPersistSessions(prev =>
             prev.map(s => (s.id === sessionId ? { ...s, title: newTitle.trim() } : s))
         );
+
+        // Backend sync
+        await renameSessionApi(sessionId, newTitle.trim());
     }, [updateAndPersistSessions]);
 
-    const handleTogglePinSession = useCallback((sessionId: string) => {
+    const handleTogglePinSession = useCallback(async (sessionId: string) => {
         logService.info(`Toggling pin for session ${sessionId}`);
+
+        let newPinned = false;
         updateAndPersistSessions(prev =>
-            prev.map(s => s.id === sessionId ? { ...s, isPinned: !s.isPinned } : s)
+            prev.map(s => {
+                if (s.id === sessionId) {
+                    newPinned = !s.isPinned;
+                    return { ...s, isPinned: newPinned };
+                }
+                return s;
+            })
         );
+
+        // Backend sync
+        await pinSessionApi(sessionId, newPinned);
     }, [updateAndPersistSessions]);
 
     const handleDuplicateSession = useCallback((sessionId: string) => {
@@ -253,7 +318,7 @@ export const useChatHistory = ({
         logService.info(`Renaming group ${groupId} to "${newTitle}"`);
         updateAndPersistGroups(prev => prev.map(g => g.id === groupId ? { ...g, title: newTitle.trim() } : g));
     }, [updateAndPersistGroups]);
-    
+
     const handleMoveSessionToGroup = useCallback((sessionId: string, groupId: string | null) => {
         logService.info(`Moving session ${sessionId} to group ${groupId}`);
         updateAndPersistSessions(prev => prev.map(s => s.id === sessionId ? { ...s, groupId } : s));
@@ -273,7 +338,7 @@ export const useChatHistory = ({
         setSavedGroups([]);
         startNewChat();
     }, [setSavedSessions, setSavedGroups, startNewChat, activeJobs]);
-    
+
     const clearCacheAndReload = useCallback(() => {
         // Confirm dialog moved to UI component
         logService.warn('User clearing all application cache and settings.');

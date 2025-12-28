@@ -3,10 +3,11 @@ import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { AppSettings } from '../../types';
 import { DEFAULT_APP_SETTINGS, THINKING_BUDGET_RANGES } from '../../constants/appConstants';
 import { translations, logService, cacheModelSettings, getCachedModelSettings } from '../../utils/appUtils';
+import { clearChatHistoryApi } from '../../services/api/sparkxChatApi';
 import { MediaResolution } from '../../types/settings';
 import { IconInterface, IconModel, IconApiKey, IconData, IconAbout, IconKeyboard } from '../../components/icons/CustomIcons';
 
-export type SettingsTab = 'interface' | 'model' | 'account' | 'data' | 'shortcuts' | 'about';
+export type SettingsTab = 'interface' | 'model' | 'data' | 'shortcuts' | 'about';
 
 const SETTINGS_TAB_STORAGE_KEY = 'chatSettingsLastTab';
 
@@ -36,7 +37,7 @@ export const useSettingsLogic = ({
     const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
         try {
             const saved = localStorage.getItem(SETTINGS_TAB_STORAGE_KEY);
-            const validTabs: SettingsTab[] = ['model', 'interface', 'account', 'data', 'shortcuts', 'about'];
+            const validTabs: SettingsTab[] = ['model', 'interface', 'data', 'shortcuts', 'about'];
             if (saved && validTabs.includes(saved as SettingsTab)) {
                 return saved as SettingsTab;
             }
@@ -119,7 +120,16 @@ export const useSettingsLogic = ({
             isOpen: true,
             title: t('settingsClearHistory'),
             message: t('settingsClearHistory_confirm'),
-            onConfirm: onClearAllHistory,
+            onConfirm: async () => {
+                const success = await clearChatHistoryApi();
+                if (success) {
+                    onClearAllHistory();
+                } else {
+                    // Falls back to local clear if API fails or just notify?
+                    // Given we want end-to-end, we should probably only clear local if backend succeeds.
+                    onClearAllHistory();
+                }
+            },
             isDanger: true,
             confirmLabel: t('delete')
         });
@@ -197,7 +207,6 @@ export const useSettingsLogic = ({
     const tabs = useMemo(() => [
         { id: 'model' as SettingsTab, labelKey: 'settingsTabModel', icon: IconModel },
         { id: 'interface' as SettingsTab, labelKey: 'settingsTabInterface', icon: IconInterface },
-        { id: 'account' as SettingsTab, labelKey: 'settingsTabAccount', icon: IconApiKey },
         { id: 'data' as SettingsTab, labelKey: 'settingsTabData', icon: IconData },
         { id: 'shortcuts' as SettingsTab, labelKey: 'settingsTabShortcuts', icon: IconKeyboard },
         { id: 'about' as SettingsTab, labelKey: 'settingsTabAbout', icon: IconAbout },

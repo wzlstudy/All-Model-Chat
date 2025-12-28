@@ -14,8 +14,14 @@ import { useChatState } from './useChatState';
 import { useChatActions } from './useChatActions';
 import { logService } from '../../utils/appUtils';
 
-export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch<React.SetStateAction<AppSettings>>, language: 'en' | 'zh') => {
-    
+export const useChat = (
+    appSettings: AppSettings,
+    setAppSettings: React.Dispatch<React.SetStateAction<AppSettings>>,
+    language: 'en' | 'zh',
+    currentUser: any | null,
+    setIsLoginModalOpen: (isOpen: boolean) => void
+) => {
+
     // 1. Core State Management
     const chatState = useChatState(appSettings);
     const {
@@ -45,20 +51,20 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
 
     // 2. Feature Hooks
     const { apiModels, isModelsLoading, modelsLoadingError, setApiModels } = useModels();
-    
-    const historyHandler = useChatHistory({ 
-        appSettings, setSavedSessions, setSavedGroups, setActiveSessionId, 
-        setEditingMessageId, setCommandedInput, setSelectedFiles, activeJobs, 
+
+    const historyHandler = useChatHistory({
+        appSettings, setSavedSessions, setSavedGroups, setActiveSessionId,
+        setEditingMessageId, setCommandedInput, setSelectedFiles, activeJobs,
         updateAndPersistSessions, activeChat, language, updateAndPersistGroups,
         userScrolledUp, selectedFiles, fileDraftsRef, activeSessionId
     });
-    
-    const fileHandler = useFileHandling({ 
-        appSettings, selectedFiles, setSelectedFiles, setAppFileError, 
-        isAppProcessingFile, setIsAppProcessingFile, currentChatSettings, 
-        setCurrentChatSettings 
+
+    const fileHandler = useFileHandling({
+        appSettings, selectedFiles, setSelectedFiles, setAppFileError,
+        isAppProcessingFile, setIsAppProcessingFile, currentChatSettings,
+        setCurrentChatSettings
     });
-    
+
     const handleAddTempFile = useCallback((file: UploadedFile) => {
         setSelectedFiles(prev => [...prev, file]);
     }, [setSelectedFiles]);
@@ -66,8 +72,8 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
     const handleRemoveTempFile = useCallback((id: string) => {
         setSelectedFiles(prev => prev.filter(f => f.id !== id));
     }, [setSelectedFiles]);
-    
-    const dragDropHandler = useFileDragDrop({ 
+
+    const dragDropHandler = useFileDragDrop({
         onFilesDropped: fileHandler.handleProcessAndAddFiles,
         onAddTempFile: handleAddTempFile,
         onRemoveTempFile: handleRemoveTempFile
@@ -79,17 +85,19 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         updateAndPersistSessions,
         setActiveSessionId,
     });
-    
+
     const scrollHandler = useChatScroll({ messages, userScrolledUp });
-    
-    const messageHandler = useMessageHandler({ 
-        appSettings, messages, isLoading, currentChatSettings, selectedFiles, 
-        setSelectedFiles, editingMessageId, setEditingMessageId, setEditMode, setAppFileError, 
-        aspectRatio, userScrolledUp, ttsMessageId, setTtsMessageId, activeSessionId, 
-        setActiveSessionId, setCommandedInput, activeJobs, loadingSessionIds, 
-        setLoadingSessionIds, updateAndPersistSessions, language, 
+
+    const messageHandler = useMessageHandler({
+        appSettings, messages, isLoading, currentChatSettings, selectedFiles,
+        setSelectedFiles, editingMessageId, setEditingMessageId, setEditMode, setAppFileError,
+        aspectRatio, userScrolledUp, ttsMessageId, setTtsMessageId, activeSessionId,
+        setActiveSessionId, setCommandedInput, activeJobs, loadingSessionIds,
+        setLoadingSessionIds, updateAndPersistSessions, language,
         scrollContainerRef: scrollHandler.scrollContainerRef,
-        sessionKeyMapRef // Pass ref to message handler
+        sessionKeyMapRef, // Pass ref to message handler
+        currentUser,
+        setIsLoginModalOpen
     });
 
     useAutoTitling({ appSettings, savedSessions, updateAndPersistSessions, language, generatingTitleSessionIds, setGeneratingTitleSessionIds, sessionKeyMapRef });
@@ -121,11 +129,11 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         const loadData = async () => await historyHandler.loadInitialData();
         loadData();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    
+
     useEffect(() => {
         if (activeSessionId && !savedSessions.find(s => s.id === activeSessionId)) {
             logService.warn(`Active session ${activeSessionId} is no longer available. Switching sessions.`);
-            const sortedSessions = [...savedSessions].sort((a,b) => b.timestamp - a.timestamp);
+            const sortedSessions = [...savedSessions].sort((a, b) => b.timestamp - a.timestamp);
             const nextSession = sortedSessions[0];
             if (nextSession) {
                 loadChatSession(nextSession.id, sortedSessions);
@@ -169,8 +177,8 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
     useEffect(() => {
         if (!isModelsLoading && apiModels.length > 0 && activeChat && !apiModels.some(m => m.id === activeChat.settings.modelId)) {
             const preferredModelId = apiModels.find(m => m.isPinned)?.id || apiModels[0]?.id;
-            if(preferredModelId) {
-                updateAndPersistSessions(prev => prev.map(s => s.id === activeSessionId ? {...s, settings: {...s.settings, modelId: preferredModelId }} : s));
+            if (preferredModelId) {
+                updateAndPersistSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, settings: { ...s.settings, modelId: preferredModelId } } : s));
             }
         }
     }, [isModelsLoading, apiModels, activeChat, activeSessionId, updateAndPersistSessions]);
@@ -183,7 +191,7 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         if (prevModelIdRef.current !== currentChatSettings.modelId) {
             const modelId = currentChatSettings.modelId;
             const isBananaModel = modelId.includes('gemini-2.5-flash-image') || modelId.includes('gemini-3-pro-image');
-            
+
             if (isBananaModel) {
                 setAspectRatio('Auto');
             } else if (aspectRatio === 'Auto') {
@@ -211,8 +219,11 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         setAppFileError,
         isAppProcessingFile,
         savedSessions,
+        setSavedSessions,
         savedGroups,
+        setSavedGroups,
         activeSessionId,
+        setActiveSessionId,
         apiModels,
         setApiModels,
         isModelsLoading,
@@ -223,11 +234,11 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         imageSize,
         setImageSize,
         ttsMessageId,
-        
+
         // Persistence
         updateAndPersistSessions,
         updateAndPersistGroups,
-        
+
         // Scroll
         scrollContainerRef: scrollHandler.scrollContainerRef,
         setScrollContainerRef: scrollHandler.setScrollContainerRef, // New export
@@ -235,7 +246,7 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         onScrollContainerScroll: scrollHandler.handleScroll,
         scrollToPrevTurn: scrollHandler.scrollToPrevTurn,
         scrollToNextTurn: scrollHandler.scrollToNextTurn,
-        
+
         // History
         loadChatSession,
         startNewChat,
@@ -250,7 +261,8 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         handleToggleGroupExpansion: historyHandler.handleToggleGroupExpansion,
         clearCacheAndReload: historyHandler.clearCacheAndReload,
         clearAllHistory: historyHandler.clearAllHistory,
-        
+        loadInitialData: historyHandler.loadInitialData,
+
         // Files & DragDrop
         isAppDraggingOver: dragDropHandler.isAppDraggingOver,
         isProcessingDrop: dragDropHandler.isProcessingDrop,
@@ -261,7 +273,7 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         handleAppDrop: dragDropHandler.handleAppDrop,
         handleCancelFileUpload: fileHandler.handleCancelFileUpload,
         handleAddFileById: fileHandler.handleAddFileById,
-        
+
         // Messaging
         handleSendMessage: messageHandler.handleSendMessage,
         handleGenerateCanvas: messageHandler.handleGenerateCanvas,
@@ -273,12 +285,12 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         handleRetryLastTurn: messageHandler.handleRetryLastTurn,
         handleTextToSpeech: messageHandler.handleTextToSpeech,
         handleEditLastUserMessage: messageHandler.handleEditLastUserMessage,
-        
+
         // Scenarios
         savedScenarios: scenarioHandler.savedScenarios,
         handleSaveAllScenarios: scenarioHandler.handleSaveAllScenarios,
         handleLoadPreloadedScenario: scenarioHandler.handleLoadPreloadedScenario,
-        
+
         // Actions (Control)
         handleTranscribeAudio: chatActions.handleTranscribeAudio,
         setCurrentChatSettings,

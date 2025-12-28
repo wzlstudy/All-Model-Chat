@@ -25,6 +25,13 @@ export const useAppProps = (logic: ReturnType<typeof useAppLogic>) => {
     handleExportChat,
     exportStatus,
     handleOpenSidePanel,
+    currentUser,
+    isLoginModalOpen,
+    setIsLoginModalOpen,
+    handleLoginSuccess,
+    handleLogout,
+    activeModule,
+    setActiveModule
   } = logic;
 
   // Sidebar Props
@@ -223,10 +230,25 @@ export const useAppProps = (logic: ReturnType<typeof useAppLogic>) => {
     currentChatSettings: chatState.currentChatSettings,
     t,
     setAvailableModels: chatState.setApiModels,
+    isLoginModalOpen,
+    setIsLoginModalOpen,
+    handleLoginSuccess,
   }), [
     uiState, settingsForModal, chatState, eventsState, dataManagement,
-    isExportModalOpen, exportStatus, handleExportChat, handleSaveSettings, t
+    isExportModalOpen, exportStatus, handleExportChat, handleSaveSettings, t,
+    isLoginModalOpen, setIsLoginModalOpen, handleLoginSuccess
   ]);
 
-  return { sidebarProps, chatAreaProps, appModalsProps };
+  // Layout Props
+  const layoutProps = useMemo(() => ({
+    activeModule,
+    onModuleChange: setActiveModule,
+    onOpenSettings: () => uiState.setIsSettingsModalOpen(true),
+    t,
+    currentUser,
+    onLogout: handleLogout,
+    onLoginClick: () => setIsLoginModalOpen(true),
+  }), [uiState, t, currentUser, handleLogout, setIsLoginModalOpen]);
+
+  return { sidebarProps, chatAreaProps, appModalsProps, layoutProps };
 };

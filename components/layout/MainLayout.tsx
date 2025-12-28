@@ -9,6 +9,10 @@ interface MainLayoutProps {
   onModuleChange: (moduleId: string) => void;
   onOpenSettings: () => void;
   t: (key: keyof typeof translations) => string;
+
+  currentUser: any | null;
+  onLogout: () => void;
+  onLoginClick: () => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -16,7 +20,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   activeModule,
   onModuleChange,
   onOpenSettings,
-  t
+  t,
+  currentUser,
+  onLogout,
+  onLoginClick
 }) => {
   return (
     <div className="main-layout-container">
@@ -25,6 +32,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         onModuleChange={onModuleChange}
         onOpenSettings={onOpenSettings}
         t={t}
+        currentUser={currentUser}
+        onLogout={onLogout}
+        onLoginClick={onLoginClick}
       />
       <main className="module-container">
         {children}
