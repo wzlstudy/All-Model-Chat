@@ -94,7 +94,7 @@ export const useAppProps = (logic: ReturnType<typeof useAppLogic>) => {
     onEditMessage: chatState.handleEditMessage,
     onDeleteMessage: chatState.handleDeleteMessage,
     onRetryMessage: chatState.handleRetryMessage,
-    onEditMessageContent: chatState.handleUpdateMessageContent, // Directly pass update handler
+    onEditMessageContent: (message: any) => chatState.handleUpdateMessageContent(message.id, message.text || message.content || ''),
     onUpdateMessageFile: chatState.handleUpdateMessageFile,
     showThoughts: chatState.currentChatSettings.showThoughts,
     themeColors: currentTheme.colors,
@@ -165,28 +165,28 @@ export const useAppProps = (logic: ReturnType<typeof useAppLogic>) => {
     handleUpdateMessageFile: chatState.handleUpdateMessageFile,
     t,
   }), [
-    chatState, uiState, appSettings, currentTheme, language, t, sessionTitle, 
-    pipState, handleLoadCanvasPromptAndSave, handleSuggestionClick, handleSetThinkingLevel, 
+    chatState, uiState, appSettings, currentTheme, language, t, sessionTitle,
+    pipState, handleLoadCanvasPromptAndSave, handleSuggestionClick, handleSetThinkingLevel,
     handleOpenSidePanel, getCurrentModelDisplayName
   ]);
 
   // Merge active chat settings into app settings for the modal so controls reflect current session
   const settingsForModal = useMemo(() => {
     if (chatState.activeSessionId && chatState.currentChatSettings) {
-        const {
-            modelId, temperature, topP, showThoughts, systemInstruction,
-            ttsVoice, thinkingBudget, thinkingLevel, lockedApiKey,
-            isGoogleSearchEnabled, isCodeExecutionEnabled, isUrlContextEnabled,
-            isDeepSearchEnabled, safetySettings, mediaResolution
-        } = chatState.currentChatSettings;
+      const {
+        modelId, temperature, topP, showThoughts, systemInstruction,
+        ttsVoice, thinkingBudget, thinkingLevel, lockedApiKey,
+        isGoogleSearchEnabled, isCodeExecutionEnabled, isUrlContextEnabled,
+        isDeepSearchEnabled, safetySettings, mediaResolution
+      } = chatState.currentChatSettings;
 
-        return { 
-            ...appSettings,
-            modelId, temperature, topP, showThoughts, systemInstruction,
-            ttsVoice, thinkingBudget, thinkingLevel, lockedApiKey,
-            isGoogleSearchEnabled, isCodeExecutionEnabled, isUrlContextEnabled,
-            isDeepSearchEnabled, safetySettings, mediaResolution
-        };
+      return {
+        ...appSettings,
+        modelId, temperature, topP, showThoughts, systemInstruction,
+        ttsVoice, thinkingBudget, thinkingLevel, lockedApiKey,
+        isGoogleSearchEnabled, isCodeExecutionEnabled, isUrlContextEnabled,
+        isDeepSearchEnabled, safetySettings, mediaResolution
+      };
     }
     return appSettings;
   }, [appSettings, chatState.currentChatSettings, chatState.activeSessionId]);
